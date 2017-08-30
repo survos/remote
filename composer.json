@@ -1,0 +1,77 @@
+{
+  "name": "survos/remote",
+  "license": "proprietary",
+  "description": "External processes that use the API and queues to exchange data with the Survos Platform",
+  "type": "project",
+  "autoload": {
+    "psr-4": {
+      "": "src/"
+    },
+    "classmap": [
+      "app/AppKernel.php",
+      "app/AppCache.php"
+    ]
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "Tests\\": "tests/"
+    }
+  },
+  "require": {
+    "php": ">=7.1",
+    "symfony/symfony": "^3.2",
+    "doctrine/orm": "^2.5",
+    "doctrine/doctrine-bundle": "^1.6",
+    "doctrine/doctrine-cache-bundle": "^1.2",
+    "symfony/swiftmailer-bundle": "^2.3",
+    "symfony/monolog-bundle": "^2.8",
+    "sensio/distribution-bundle": "^5.0",
+    "sensio/framework-extra-bundle": "^3",
+    "incenteev/composer-parameter-handler": "^2.0",
+    "aws/aws-sdk-php": "^3",
+    "survos/platform-api-php": "dev-master",
+    "jwage/easy-csv": "^0.0.3",
+    "league/oauth2-client": "^1.3",
+    "bcncommerce/json-stream": "^0.3.0"
+  },
+  "require-dev": {
+    "sensio/generator-bundle": "^3",
+    "symfony/phpunit-bridge": "^2.7"
+  },
+  "scripts": {
+    "post-install-cmd": [
+      "Incenteev\\ParameterHandler\\ScriptHandler::buildParameters",
+      "Sensio\\Bundle\\DistributionBundle\\Composer\\ScriptHandler::buildBootstrap",
+      "Sensio\\Bundle\\DistributionBundle\\Composer\\ScriptHandler::clearCache",
+      "Sensio\\Bundle\\DistributionBundle\\Composer\\ScriptHandler::installAssets",
+      "Sensio\\Bundle\\DistributionBundle\\Composer\\ScriptHandler::installRequirementsFile",
+      "Sensio\\Bundle\\DistributionBundle\\Composer\\ScriptHandler::prepareDeploymentTarget"
+    ],
+    "post-update-cmd": [
+      "Incenteev\\ParameterHandler\\ScriptHandler::buildParameters",
+      "Sensio\\Bundle\\DistributionBundle\\Composer\\ScriptHandler::buildBootstrap",
+      "Sensio\\Bundle\\DistributionBundle\\Composer\\ScriptHandler::clearCache",
+      "Sensio\\Bundle\\DistributionBundle\\Composer\\ScriptHandler::installAssets",
+      "Sensio\\Bundle\\DistributionBundle\\Composer\\ScriptHandler::installRequirementsFile",
+      "Sensio\\Bundle\\DistributionBundle\\Composer\\ScriptHandler::prepareDeploymentTarget"
+    ]
+  },
+  "config": {
+    "platform": {
+      "php": "7.1"
+    }
+  },
+  "minimum-stability": "dev",
+  "prefer-stable": true,
+  "extra": {
+    "symfony-app-dir": "app",
+    "symfony-bin-dir": "bin",
+    "symfony-var-dir": "var",
+    "symfony-web-dir": "web",
+    "symfony-tests-dir": "tests",
+    "symfony-assets-install": "relative",
+    "incenteev-parameters": {
+      "file": "app/config/parameters.yml"
+    }
+  }
+}

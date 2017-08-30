@@ -1,0 +1,77 @@
+{
+    "questions": [
+        {
+            "code": "wind_speed"
+        },
+        {
+            "code": "temperature"
+        }
+    ],
+    "responses": [],
+    "assignment": {
+        "Id": 693,
+        "AmazonId": "yunong_6447310_rep_0001",
+        "SurveyResponseStatusCode": "scheduled",
+        "TurkStatusCode": null,
+        "MemberId": 54,
+        "WorkerAmazonId": null,
+        "Ip": "127.0.0.1",
+        "BonusIdx": null,
+        "TotalBonus": 0,
+        "AcceptTime": null,
+        "AutoApprovalTime": null,
+        "Deadline": null,
+        "SubmitTime": null,
+        "ApprovalTime": null,
+        "RejectionTime": null,
+        "Duration": null,
+        "PluralityAnswersCorrect": null,
+        "PluralityAnswersIncorrect": null,
+        "WorkerAgreementScore": null,
+        "Score": null,
+        "WithinIntervalCount": null,
+        "WithinIntervalLastUpdate": null,
+        "NeedsRecalc": null,
+        "AnswerXml": null,
+        "AnswerJson": null,
+        "SubmittedJson": null,
+        "WorkerPayment": null,
+        "TaskId": 85,
+        "Longitude": null,
+        "Latitude": null,
+        "TheGeom": null,
+        "ScheduledTime": {
+            "date": "2016-02-03 13:00:00.000000",
+            "timezone_type": 3,
+            "timezone": "UTC"
+        },
+        "ScheduledEndTime": null,
+        "StudyDay": 1,
+        "WithinDayIndex": 1,
+        "TriggerTypeCode": "scheduled",
+        "FirstResponseTime": null,
+        "LastResponseTime": null,
+        "LastReminderTime": null,
+        "ErrorMessage": null,
+        "QuestionCode": null,
+        "SubscaleScoresJson": null,
+        "ExtraJson": null,
+        "TriggerJson": null,
+        "ResponseJson": null,
+        "DataPushStatusCode": null,
+        "CreatedAt": {
+            "date": "2016-02-10 17:45:44.000000",
+            "timezone_type": 3,
+            "timezone": "UTC"
+        },
+        "UpdatedAt": {
+            "date": "2016-02-10 17:45:44.000000",
+            "timezone_type": 3,
+            "timezone": "UTC"
+        },
+        "expiresAt": "",
+        "reminderAt": "",
+        "warningAt": "",
+        "statusCode": "scheduled"
+    }
+}

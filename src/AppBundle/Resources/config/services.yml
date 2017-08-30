@@ -1,0 +1,20 @@
+services:
+    aws.credentials:
+        class: Aws\Credentials\Credentials
+        arguments:
+            - %aws_key%
+            - %aws_secret%
+    aws.s3:
+        class: Aws\S3\S3Client
+        arguments:
+            -
+                credentials: "@aws.credentials"
+                region: us-east-1
+                version: '2006-03-01'
+    aws.sqs:
+        class: Aws\Sqs\SqsClient
+        arguments:
+            -
+                credentials: "@aws.credentials"
+                region: us-east-1
+                version: '2012-11-05'
