@@ -7,6 +7,7 @@ use Aws\Result;
 use Aws\Sqs\SqsClient;
 use GuzzleHttp\Promise\Promise;
 use GuzzleHttp\Promise\PromiseInterface;
+use React\EventLoop\StreamSelectLoop;
 use Survos\Client\Resource\ChannelResource;
 use Survos\Client\SurvosClient;
 use Symfony\Component\Console\Input\InputArgument;
@@ -14,6 +15,12 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
+
+use Bunny\Channel;
+use Bunny\Async\Client as BunnyClient;
+use Bunny\Message;
+use React\EventLoop\Factory;
+
 
 abstract class SqsCommand extends BaseCommand
 {
@@ -23,13 +30,23 @@ abstract class SqsCommand extends BaseCommand
     /** @var SurvosClient */
     protected $survosClient;
 
+    /** @var StreamSelectLoop */
+    protected $loop;
+
     protected function configure()
     {
         parent::configure();
-        $this->addArgument(
+        $this
+            ->addArgument(
                 'queue-name',
                 InputArgument::REQUIRED,
                 'SQS Queue Name'
+            )
+            ->addArgument(
+                'queue-type',
+                InputArgument::OPTIONAL,
+                'Queue Type (rabbit or sqs)',
+                'sqs'
             )
             ->addOption(
                 'aws-key',
@@ -62,18 +79,25 @@ abstract class SqsCommand extends BaseCommand
     {
         parent::initialize($input, $output);
         $container = $this->getContainer();
-        $credentials = new Credentials(
-            $input->getOption('aws-key') ?: $container->getParameter('aws_key'),
-            $input->getOption('aws-secret') ?: $container->getParameter('aws_secret')
-        );
-        $region = $input->hasOption('aws-region') ? $input->getOption('aws-region') : 'us-east-1';
-        $this->sqs = new SqsClient(
-            [
-                'credentials' => $credentials,
-                'region'      => $region,
-                'version'     => '2012-11-05',
-            ]
-        );
+
+        if ($input->getArgument('queue-type') == 'sqs') {
+            $credentials = new Credentials(
+                $input->getOption('aws-key') ?: $container->getParameter('aws_key'),
+                $input->getOption('aws-secret') ?: $container->getParameter('aws_secret')
+            );
+            $region = $input->hasOption('aws-region') ? $input->getOption('aws-region') : 'us-east-1';
+            $this->sqs = new SqsClient(
+                [
+                    'credentials' => $credentials,
+                    'region'      => $region,
+                    'version'     => '2012-11-05',
+                ]
+            );
+        } else {
+            $this->loop = Factory::create();
+        }
+
+
     }
 
     /** @var Promise[] */
@@ -89,18 +113,18 @@ abstract class SqsCommand extends BaseCommand
     protected function execute(InputInterface $input, OutputInterface $output)
     {
         $queues = explode(',', $input->getArgument('queue-name'));
-        while (true) {
-            foreach ($queues as $queue) {
-                if (isset($this->promises[$queue]) && $this->isPromisePending($this->promises[$queue])) {
-                    $this->output->writeln("Queue '{$queue}': pending");
-                    continue;
+        $queueType = $input->getArgument('queue-type');
+                while (true) {
+                    foreach ($queues as $queue) {
+                        if (isset($this->promises[$queue]) && $this->isPromisePending($this->promises[$queue])) {
+                            $this->output->writeln("Queue '{$queue}': pending");
+                            continue;
+                        }
+                        $this->output->writeln("{$queueType} Queue '{$queue}': initiating");
+                        $this->promises[$queue] = $queueType=='sqs' ? $this->processQueue($queue) : $this->processRabbitQueue($queue);
+                    }
+                    \GuzzleHttp\Promise\unwrap($this->promises);
                 }
-                $this->output->writeln("Queue '{$queue}': initiating");
-                $this->promises[$queue] = $this->processQueue($queue);
-            }
-            \GuzzleHttp\Promise\unwrap($this->promises);
-        }
-
         return 0; // OK
     }
 
@@ -133,7 +157,7 @@ abstract class SqsCommand extends BaseCommand
         $promise = $this->sqs->receiveMessageAsync($options);
         $promise->then(function (Result $result) use ($queueName) {
             $this->output->writeln("Queue '{$queueName}': resolved!");
-            $this->processMessages($result, $queueName);
+            $this->processSqsMessages($result, $queueName);
         }, function (\Exception $e) use ($queueName) {
             $this->output->writeln("Queue '{$queueName}': rejected! {$e->getMessage()}");
         });
@@ -141,10 +165,87 @@ abstract class SqsCommand extends BaseCommand
     }
 
     /**
+     * @param string $queueName
+     * @return Promise
+     */
+    protected function processRabbitQueue($queueName, $limit=3)
+    {
+
+        $rabbitOptions = [];
+        // rabbit server credentials
+        foreach (['host', 'port', 'user', 'password', 'vhost'] as $name) {
+            $rabbitOptions[$name] = $this->getContainer()->getParameter("rabbitmq.$name");
+        }
+
+        $this->queueName = $queueName; // may be a problem if we process multiple queues with one script
+
+
+        (new BunnyClient($this->loop, $rabbitOptions))
+            ->connect()
+            ->then(function (BunnyClient $client) {
+            return $client->channel();
+        })->then(function (Channel $channel) use ($limit) {
+            return $channel->qos(0, $limit)->then(function () use ($channel) {
+                return $channel;
+            });
+        })->then(function (Channel $channel) {
+
+            return $channel->queueDeclare($this->queueName, false, true, false, false)->then(function () use ($channel) {
+                return $channel;
+            });
+        })->then(function (Channel $channel) {
+            echo sprintf(" [*] Waiting for messages on %s. To exit press CTRL+C\n", $this->queueName);
+            $channel->consume(
+                function (Message $message, Channel $channel, BunnyClient $client) {
+
+                    $data = json_decode($message->content, true);
+                    dump($data);
+                    // not async like background, send message as array
+                    $ok = $this->processMessage(
+                        json_decode($data['Body'], true),
+                        json_decode(json_encode($message), true));
+                    if ($ok) {
+                        $channel->ack($message);
+                    } else {
+                        // client script should handle errors, just requeue if bad
+                        if ($this->input->getOption('delete-bad')) {
+                            $this->output->writeln('(dropping message)', OutputInterface::VERBOSITY_VERBOSE);
+                            $channel->reject($message, false); // don't requeue
+                        } else {
+                            $this->output->writeln('(requeuing message)', OutputInterface::VERBOSITY_VERBOSE);
+                            // For some reason, requeue isn't working
+                            // $channel->reject($message, true); // make sure we've done something, in case exception gets caught so we're still running
+                            die(1);
+                        }
+                    }
+                }
+            );
+        });
+        $this->loop->run();
+
+        /*
+        $rabbitService = $this->getContainer()->get('survos.rabbitmq');
+        $bgQueueInfo = $rabbitService->getQueueInfo($queueName);
+        $this->output->writeln(sprintf('%s messages pending on %s', $bgQueueInfo['messages'], $queueName));
+
+        $options = [
+        ];
+        $promise = $this->sqs->receiveMessageAsync($options);
+        $promise->then(function (Result $result) use ($queueName) {
+            $this->output->writeln("Queue '{$queueName}': resolved!");
+            $this->processMessages($result, $queueName);
+        }, function (\Exception $e) use ($queueName) {
+            $this->output->writeln("Queue '{$queueName}': rejected! {$e->getMessage()}");
+        });
+        return $promise;
+        */
+    }
+
+    /**
      * @param Result $result
      * @param string $queueName
      */
-    protected function processMessages(Result $result, $queueName)
+    protected function processSqsMessages(Result $result, $queueName)
     {
         $processed = 0;
         if (isset($result['Messages'])) {
@@ -225,18 +326,31 @@ abstract class SqsCommand extends BaseCommand
     /**
      * send the answers back to using ChannelResource::sendData
      */
-    protected function sendData(string $channelCode, array $answers, int $taskId, ?int $assignmentId): array
+    protected function sendData(array $channelData, array $answers): array
     {
+        $channelData = (new OptionsResolver())->setDefaults([
+            'assignmentId' => null,
+            'command' => 'complete',
+        ])->setRequired([
+            'taskId',
+            'channelCode'
+        ])->resolve($channelData);
+
         dump(__METHOD__, $answers);
         $currentUserId = $this->survosClient->getLoggedUser()['id'];
         $res = new ChannelResource($this->survosClient);
-        $response = $res->sendData($channelCode, [
+        $response = $res->sendData($channelData['channelCode'], $sentData = [
             'answers' => $answers,
+            // seems like this meta-data could be grouped
+            'command' => $channelData['command'],
             'memberId' => $currentUserId,
-            'taskId' => $taskId,
-            'assignmentId' => $assignmentId,
+            'taskId' => $channelData['taskId'],
+            'assignmentId' => $channelData['assignmentId'],
         ]);
-        $this->output->writeln('Submitted: ' . json_encode($response, JSON_PRETTY_PRINT));
+        $this->output->writeln(sprintf("Submitted to %s:\n %s\nReceived: %s",
+            $res->getLastRequestPath(),
+            json_encode($sentData, JSON_PRETTY_PRINT),
+            json_encode($response, JSON_PRETTY_PRINT)) );
         return $response;
     }
 

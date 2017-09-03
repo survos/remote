@@ -53,7 +53,7 @@ class GoogleTimelineImportCommand extends SqsCommand
         if ($this->input->getOption('verbose')) {
             dump($answers);
         }
-        $this->sendData($data['channelCode'], $answers, $data['taskId'], $data['assignmentId']);
+        $this->sendData($data, $answers);
 
         return true;
     }

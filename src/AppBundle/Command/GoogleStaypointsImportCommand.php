@@ -29,6 +29,8 @@ class GoogleStaypointsImportCommand extends SqsCommand
             dump($data, $payload);
         }
 
+
+
         $this->survosClient = $this->getClient($data['apiUrl'], $data['accessToken']);
 
         $localPath = $this->downloadFile($data['parameters']['imageUrl']);
@@ -46,7 +48,7 @@ class GoogleStaypointsImportCommand extends SqsCommand
             dump($answers);
         }
 
-        $this->sendData($data['channelCode'], $answers, $data['taskId'], $data['assignmentId']);
+        $this->sendData($data, $answers);
 
         return true; // use --delete-bad to leave the message in the queue.
     }

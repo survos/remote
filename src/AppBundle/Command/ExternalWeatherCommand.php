@@ -19,14 +19,11 @@ class ExternalWeatherCommand extends SqsCommand
     /** @var string */
     private $fromQueueName;
 
-    /** @var string */
-    private $toQueueName;
-
     protected function configure()
     {
         parent::configure();
         $this
-            ->setName('app:weather')
+            ->setName('remote:weather')
             ->setDescription('Process a queue dedicated to weather')
             ->setHelp("Reads from an SQS queue, looks up the weather, then pushes back to channel")
             ;
@@ -48,6 +45,7 @@ class ExternalWeatherCommand extends SqsCommand
         return 0; // OK
     }
 
+
     protected function processMessage(array $data, array $message) : bool
     {
         $data = $this->validateMessage($data);
@@ -62,7 +60,9 @@ class ExternalWeatherCommand extends SqsCommand
                 dump($answers);
             }
             if ($answers) {
-                $this->sendData($data['channelCode'], $answers, $data['taskId'], $data['assignmentId']);
+                // $data['command'] = 'partial';
+                $this->sendData(array_filter($data, function ($key) { return in_array($key, ['command', 'taskId','assignmentId','channelCode']);}, ARRAY_FILTER_USE_KEY),
+                    $answers);
             }
         } catch (\Exception $e) {
             if ($e instanceof AssignmentExceptionInterface) {
@@ -84,6 +84,8 @@ class ExternalWeatherCommand extends SqsCommand
             }
         }
 
+//        return false;
+
         return true; // message is handled and can be deleted
     }
 
@@ -96,14 +98,16 @@ class ExternalWeatherCommand extends SqsCommand
      */
     private function getWeatherData($zip, $countryCode = 'US')
     {
+        // @todo: replace with guzzle, handle errors
         if (!isset($this->services['weather'])) {
             $this->services['weather'] = json_decode(
                 file_get_contents(
-                    "http://api.openweathermap.org/data/2.5/weather?zip={$zip},{$countryCode}&appid=0dde8683a8619233195ca7917465b29d"
+                    $url = "http://api.openweathermap.org/data/2.5/weather?zip={$zip},{$countryCode}&appid=0dde8683a8619233195ca7917465b29d"
                     //"http://api.openweathermap.org/data/2.5/weather?lat={$lat}&lon={$lon}&appid=0dde8683a8619233195ca7917465b29d"
                 ),
                 true
             );
+            printf("Url: %s\n", $url);
         }
 
         return $this->services['weather'];
@@ -117,16 +121,15 @@ class ExternalWeatherCommand extends SqsCommand
     private function processAssignment(array $data) : array
     {
         $answers = $data['payload'];
-        $zip = $answers['zipcode'] ?? null;
+        $zip = $answers['zip'] ?? null;
         if (!$zip) {
-            throw new \Exception("No 'zipcode' in payload for assignment " . $data['assignmentId']);
+            throw new \Exception("No 'zip' in payload for assignment " . $data['assignmentId']);
         }
         foreach ($answers as $questionCode => $default) {
             $weatherData = $this->getWeatherData($zip);
             switch ($questionCode) {
                 case 'temp':
                 case 'temperature':
-                    // needs persisting to responses
                     $answers[$questionCode] = $weatherData['main']['temp'];
                     break;
                 case 'wind_speed':
