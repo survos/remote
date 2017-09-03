@@ -112,13 +112,13 @@ class ExternalWeatherCommand extends SqsCommand
         if (!$this->cache->has($key)) {
             $data = json_decode(
                 file_get_contents(
-                    $url = "http://api.openweathermap.org/data/2.5/weather?zip={$zip},{$countryCode}&appid=0dde8683a8619233195ca7917465b29d"
+                    $url = sprintf("http://api.openweathermap.org/data/2.5/weather?zip=%s,%s&units=imperial&appid=0dde8683a8619233195ca7917465b29d", $zip, $countryCode)
                 //"http://api.openweathermap.org/data/2.5/weather?lat={$lat}&lon={$lon}&appid=0dde8683a8619233195ca7917465b29d"
                 ),
                 true
             );
             printf("Fetching and caching : %s\n", $url);
-            $this->cache->set($key, $data);
+            $this->cache->set($key, $data, 3600); // refresh every hour
         }
         return $this->cache->get($key);
     }
