@@ -77,7 +77,9 @@ abstract class SqsCommand extends BaseCommand
      */
     protected function initialize(InputInterface $input, OutputInterface $output)
     {
-        parent::initialize($input, $output);
+        // parent::initialize($input, $output);
+        $this->input = $input;
+        $this->output = $output;
         $container = $this->getContainer();
 
         if ($input->getArgument('queue-type') == 'sqs') {

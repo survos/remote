@@ -14,7 +14,7 @@ class GoogleStaypointsImportCommand extends SqsCommand
         parent::configure();
 
         $this
-            ->setName('app:import-staypoints')
+            ->setName('remote:import-staypoints')
             ->setDescription('Google Timeline "My Places" Import')
         ;
     }
@@ -36,19 +36,27 @@ class GoogleStaypointsImportCommand extends SqsCommand
         $localPath = $this->downloadFile($data['parameters']['imageUrl']);
         $answersResolver = new OptionsResolver();
         $answersResolver->setDefaults($payload);
-        try {
+
+        $localPath = '/var/www/survos/platform/web/uploads/tac-timeline.zip';
             $answers = $answersResolver->resolve($this->processFile($localPath));
+        try {
         } catch (\Throwable $e) {
             $errorMessage = 'Uploaded file is invalid';
             $this->sendError($data['channelCode'], $errorMessage, $data['taskId'], $data['assignmentId']);
             $this->output->writeln('unable to process file: '. $e->getMessage());
-            return true;
+            return false; // true;
         }
         if ($this->input->getOption('verbose')) {
             dump($answers);
         }
 
-        $this->sendData($data, $answers);
+        if ($answers) {
+            $data['command'] = 'partial';
+            $this->sendData(array_filter($data, function ($key) { return in_array($key, ['command', 'taskId','assignmentId','channelCode']);}, ARRAY_FILTER_USE_KEY),
+                $answers);
+        }
+
+        die('stopped');
 
         return true; // use --delete-bad to leave the message in the queue.
     }
@@ -98,10 +106,18 @@ class GoogleStaypointsImportCommand extends SqsCommand
         if (!file_exists($filename)) {
             throw new \Exception("File '{$filename}' not found");
         }
+        /*
         $zippedFn = "zip://{$filename}#Takeout/Maps (your places)/Saved Places.json";
-        $items = json_decode(file_get_contents($zippedFn)); //
+        if (!is_resource($zippedFn)) {
+            throw new \Exception("Zipped '{$zippedFn}' not a resource");
+        }
+        */
+        // hack until reading from zip file is figured out
+        $zippedFn = pathinfo($filename, PATHINFO_DIRNAME) . '/Takeout/Maps (your places)/Saved Places.json';
+        $items = json_decode($json=file_get_contents($zippedFn)); //
         $count = 0;
         $staypoints = [];
+
         foreach ($items->features as $item) {
             $it = $this->flattenArray($item->properties);
             if (null !== $data = $this->normalizeItem($it)) { // where does member id come in?  $userId)) {
