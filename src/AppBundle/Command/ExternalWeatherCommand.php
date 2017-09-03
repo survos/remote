@@ -6,6 +6,7 @@ use AppBundle\Command\Base\SqsCommand;
 use AppBundle\Exception\AssignmentExceptionInterface;
 use AppBundle\Exception\PosseExceptionInterface;
 use Survos\Client\SurvosClient;
+use Symfony\Component\Cache\Simple\FilesystemCache;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -19,6 +20,9 @@ class ExternalWeatherCommand extends SqsCommand
     /** @var string */
     private $fromQueueName;
 
+    /** @var  FilesystemCache */
+    private $cache;
+
     protected function configure()
     {
         parent::configure();
@@ -27,6 +31,9 @@ class ExternalWeatherCommand extends SqsCommand
             ->setDescription('Process a queue dedicated to weather')
             ->setHelp("Reads from an SQS queue, looks up the weather, then pushes back to channel")
             ;
+
+        $this->cache = new FilesystemCache();
+
     }
 
     /**
@@ -98,19 +105,22 @@ class ExternalWeatherCommand extends SqsCommand
      */
     private function getWeatherData($zip, $countryCode = 'US')
     {
-        // @todo: replace with guzzle, handle errors
-        if (!isset($this->services['weather'])) {
-            $this->services['weather'] = json_decode(
+
+        // @todo: replace with guzzle or even guzzleCache
+
+        $key = 'weather.' . $zip;
+        if (!$this->cache->has($key)) {
+            $data = json_decode(
                 file_get_contents(
                     $url = "http://api.openweathermap.org/data/2.5/weather?zip={$zip},{$countryCode}&appid=0dde8683a8619233195ca7917465b29d"
-                    //"http://api.openweathermap.org/data/2.5/weather?lat={$lat}&lon={$lon}&appid=0dde8683a8619233195ca7917465b29d"
+                //"http://api.openweathermap.org/data/2.5/weather?lat={$lat}&lon={$lon}&appid=0dde8683a8619233195ca7917465b29d"
                 ),
                 true
             );
-            printf("Url: %s\n", $url);
+            printf("Fetching and caching : %s\n", $url);
+            $this->cache->set($key, $data);
         }
-
-        return $this->services['weather'];
+        return $this->cache->get($key);
     }
 
     /**
