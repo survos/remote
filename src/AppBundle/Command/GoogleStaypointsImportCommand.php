@@ -39,7 +39,7 @@ class GoogleStaypointsImportCommand extends SqsCommand
             $errorMessage = 'Uploaded file is invalid';
             $this->sendError($data['channelCode'], $errorMessage, $data['taskId'], $data['assignmentId']);
             $this->output->writeln('unable to process file: '. $e->getMessage());
-            return false; // true;
+            return false;
         }
         if ($this->input->getOption('verbose')) {
             dump($answers);
@@ -50,8 +50,6 @@ class GoogleStaypointsImportCommand extends SqsCommand
             $this->sendData(array_filter($data, function ($key) { return in_array($key, ['command', 'taskId','assignmentId','channelCode']);}, ARRAY_FILTER_USE_KEY),
                 $answers);
         }
-
-        die('stopped');
 
         return true; // use --delete-bad to leave the message in the queue.
     }
