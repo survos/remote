@@ -28,18 +28,13 @@ class GoogleStaypointsImportCommand extends SqsCommand
         if ($this->input->getOption('verbose')) {
             dump($data, $payload);
         }
-
-
-
         $this->survosClient = $this->getClient($data['apiUrl'], $data['accessToken']);
-
-        $localPath = $this->downloadFile($data['parameters']['imageUrl']);
-        $answersResolver = new OptionsResolver();
-        $answersResolver->setDefaults($payload);
-
-        $localPath = '/var/www/survos/platform/web/uploads/tac-timeline.zip';
-            $answers = $answersResolver->resolve($this->processFile($localPath));
+        $queueType = $this->input->getArgument('queue-type');
         try {
+            $localPath = $queueType === 'sqs' ? $this->downloadFile($data['parameters']['imageUrl']) : $this->resolveLocalPath($data['parameters']['imageUrl']);
+            $answersResolver = new OptionsResolver();
+            $answersResolver->setDefaults($payload);
+            $answers = $answersResolver->resolve($this->processFile($localPath));
         } catch (\Throwable $e) {
             $errorMessage = 'Uploaded file is invalid';
             $this->sendError($data['channelCode'], $errorMessage, $data['taskId'], $data['assignmentId']);
@@ -59,6 +54,22 @@ class GoogleStaypointsImportCommand extends SqsCommand
         die('stopped');
 
         return true; // use --delete-bad to leave the message in the queue.
+    }
+
+    private function resolveLocalPath($url): string
+    {
+        $platformRoot = realpath($this->getContainer()->getParameter('kernel.project_dir') . '/../platform/web');
+        if (!file_exists($platformRoot)) {
+            throw new \Exception("Can't find the platform root. It's supposed to be here: {$platformRoot}");
+        }
+        if (!preg_match('/(\/uploads.+$)/', $url, $matches)) {
+            throw new \Exception("Can't parse file location from url: {$url}");
+        }
+        $path = $platformRoot . $matches[1];
+        if (!file_exists($path)) {
+            throw new \Exception("Can't resolve local path ({$path}) from url: {$url}");
+        }
+        return $path;
     }
 
     private function downloadFile($url)
@@ -106,20 +117,16 @@ class GoogleStaypointsImportCommand extends SqsCommand
         if (!file_exists($filename)) {
             throw new \Exception("File '{$filename}' not found");
         }
-        /*
         $zippedFn = "zip://{$filename}#Takeout/Maps (your places)/Saved Places.json";
-        if (!is_resource($zippedFn)) {
-            throw new \Exception("Zipped '{$zippedFn}' not a resource");
+        if (false === $json=file_get_contents($zippedFn)) {
+            throw new \Exception("The archive doesn't have places, checkout its content: '{$zippedFn}'");
         }
-        */
-        // hack until reading from zip file is figured out
-        $zippedFn = pathinfo($filename, PATHINFO_DIRNAME) . '/Takeout/Maps (your places)/Saved Places.json';
-        $items = json_decode($json=file_get_contents($zippedFn)); //
+        $items = json_decode($json, true);
         $count = 0;
         $staypoints = [];
 
-        foreach ($items->features as $item) {
-            $it = $this->flattenArray($item->properties);
+        foreach ($items['features'] as $item) {
+            $it = $this->flattenArray($item['properties']);
             if (null !== $data = $this->normalizeItem($it)) { // where does member id come in?  $userId)) {
                 $staypoints[] = $data;
                 $count++;
