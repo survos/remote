@@ -26,9 +26,6 @@ class GoogleTimelineImportCommand extends SqsCommand
 
     private $queue = [];
 
-    /** @var SurvosClient */
-    private $mapmobClient;
-
     protected function processMessage(array $data, array $message) : bool
     {
         $data = $this->validateMessage($data);
@@ -36,19 +33,18 @@ class GoogleTimelineImportCommand extends SqsCommand
         if ($this->input->getOption('verbose')) {
             dump($data, $payload);
         }
-        $this->mapmobClient = $this->getClient($this->input->getOption('api-url'), $data['mapmobToken']);
         $this->survosClient = $this->getClient($data['apiUrl'], $data['accessToken']);
-
-        $localPath = $this->downloadFile($data['parameters']['imageUrl']);
-        $answersResolver = new OptionsResolver();
-        $answersResolver->setDefaults($payload);
+        $queueType = $this->input->getArgument('queue-type');
         try {
+            $localPath = $queueType === 'sqs' ? $this->downloadFile($data['parameters']['imageUrl']) : $this->resolveLocalPath($data['parameters']['imageUrl']);
+            $answersResolver = new OptionsResolver();
+            $answersResolver->setDefaults($payload);
             $answers = $answersResolver->resolve($this->processFile($localPath));
         } catch (\Throwable $e) {
             $errorMessage = 'Uploaded file is invalid';
             $this->sendError($data['channelCode'], $errorMessage, $data['taskId'], $data['assignmentId']);
             $this->output->writeln('unable to process file: '. $e->getMessage());
-            return true;
+            return false;
         }
         if ($this->input->getOption('verbose')) {
             dump($answers);
@@ -56,6 +52,22 @@ class GoogleTimelineImportCommand extends SqsCommand
         $this->sendData($data, $answers);
 
         return true;
+    }
+
+    private function resolveLocalPath($url): string
+    {
+        $platformRoot = realpath($this->getContainer()->getParameter('kernel.project_dir') . '/../platform/web');
+        if (!file_exists($platformRoot)) {
+            throw new \Exception("Can't find the platform root. It's supposed to be here: {$platformRoot}");
+        }
+        if (!preg_match('/(\/uploads.+$)/', $url, $matches)) {
+            throw new \Exception("Can't parse file location from url: {$url}");
+        }
+        $path = $platformRoot . $matches[1];
+        if (!file_exists($path)) {
+            throw new \Exception("Can't resolve local path ({$path}) from url: {$url}");
+        }
+        return $path;
     }
 
     private function downloadFile($url)
@@ -86,7 +98,7 @@ class GoogleTimelineImportCommand extends SqsCommand
         $limit = $this->input->getOption('row-limit');
         $count = 0;
         $dates = [];
-        $userId = $this->mapmobClient->getLoggedUser()['id'];
+        $userId = $this->survosClient->getLoggedUser()['id'];
         foreach ($this->getItems($sourceFile) as $item) {
             if (null !== $data = $this->normalizeItem($item, $userId)) {
                 $this->addToQueue($data);
@@ -198,10 +210,10 @@ class GoogleTimelineImportCommand extends SqsCommand
         if (empty($this->queue)) {
             return;
         }
-        $deviceId = md5($this->mapmobClient->getLoggedUser()['id']);
+        $deviceId = md5($this->survosClient->getLoggedUser()['id']);
         $data = $this->prepareData($this->queue, $deviceId);
-        $this->output->writeln(sprintf('Submitting %d points to %s', count($this->queue), $this->mapmobClient->getEndpoint()));
-        $this->submitLocationData($this->mapmobClient, $data);
+        $this->output->writeln(sprintf('Submitting %d points to %s', count($this->queue), $this->survosClient->getEndpoint()));
+        $this->submitLocationData($this->survosClient, $data);
         $this->queue = [];
     }
 
