@@ -6,6 +6,7 @@ use Survos\Client\Resource\ObserveResource;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
+use OAuthException;
 
 class GoogleStaypointsImportCommand extends SqsCommand
 {
@@ -17,6 +18,7 @@ class GoogleStaypointsImportCommand extends SqsCommand
             ->setName('remote:import-staypoints')
             ->setDescription('Google Timeline "My Places" Import')
         ;
+
     }
 
     protected function processMessage(array $data, array $message) : bool
@@ -28,7 +30,15 @@ class GoogleStaypointsImportCommand extends SqsCommand
         if ($this->input->getOption('verbose')) {
             dump($data, $payload);
         }
-        $this->survosClient = $this->getClient($data['apiUrl'], $data['accessToken']);
+        try {
+            $this->survosClient = $this->getClient($data['apiUrl'], $data['accessToken']);
+        } catch (\Exception $e) { // why not oAuthException?
+            // probably deleted
+            $this->output->write($e->getMessage(), true);
+            if ($this->input->getOption('delete-bad')) {
+                return true;
+            }
+        }
         $queueType = $this->input->getArgument('queue-type');
         try {
             $localPath = $queueType === 'sqs' ? $remoteHandler->downloadFile($data['parameters']['imageUrl']) : $remoteHandler->resolveLocalPath($data['parameters']['imageUrl']);

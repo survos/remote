@@ -17,6 +17,7 @@ use Bunny\Channel;
 use Bunny\Async\Client as BunnyClient;
 use Bunny\Message;
 use React\EventLoop\Factory;
+use OAuthException;
 
 
 abstract class SqsCommand extends BaseCommand
@@ -29,6 +30,12 @@ abstract class SqsCommand extends BaseCommand
 
     /** @var StreamSelectLoop */
     protected $loop;
+
+    /** @var  InputInterface */
+    public $input;
+
+    /** @var  OutputInterface */
+    public $output;
 
     protected function configure()
     {
@@ -111,6 +118,7 @@ abstract class SqsCommand extends BaseCommand
      */
     protected function execute(InputInterface $input, OutputInterface $output)
     {
+        $this->initialize($input, $output);
         $queues = explode(',', $input->getArgument('queue-name'));
         $queueType = $input->getArgument('queue-type');
                 while (true) {
