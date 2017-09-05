@@ -18,3 +18,7 @@ services:
                 credentials: "@aws.credentials"
                 region: us-east-1
                 version: '2012-11-05'
+
+    app.remote_handler:
+        class: AppBundle\Services\RemoteHandlerTools
+        arguments: ['%platform_path%']

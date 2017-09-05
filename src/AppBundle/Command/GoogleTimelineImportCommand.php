@@ -28,7 +28,9 @@ class GoogleTimelineImportCommand extends SqsCommand
 
     protected function processMessage(array $data, array $message) : bool
     {
-        $data = $this->validateMessage($data);
+        $remoteHandler = $this->getContainer()->get('app.remote_handler');
+        $remoteHandler->setOutput($this->output);
+        $data = $remoteHandler->validateMessage($data);
         $payload = (array)$data['payload'];
         if ($this->input->getOption('verbose')) {
             dump($data, $payload);
@@ -36,60 +38,28 @@ class GoogleTimelineImportCommand extends SqsCommand
         $this->survosClient = $this->getClient($data['apiUrl'], $data['accessToken']);
         $queueType = $this->input->getArgument('queue-type');
         try {
-            $localPath = $queueType === 'sqs' ? $this->downloadFile($data['parameters']['imageUrl']) : $this->resolveLocalPath($data['parameters']['imageUrl']);
+            $localPath = $queueType === 'sqs' ? $remoteHandler->downloadFile($data['parameters']['imageUrl']) : $remoteHandler->resolveLocalPath($data['parameters']['imageUrl']);
             $answersResolver = new OptionsResolver();
             $answersResolver->setDefaults($payload);
             $answers = $answersResolver->resolve($this->processFile($localPath));
         } catch (\Throwable $e) {
             $errorMessage = 'Uploaded file is invalid';
-            $this->sendError($data['channelCode'], $errorMessage, $data['taskId'], $data['assignmentId']);
+            $remoteHandler->sendError($this->survosClient, $data['channelCode'], $errorMessage, $data['taskId'], $data['assignmentId']);
             $this->output->writeln('unable to process file: '. $e->getMessage());
             return false;
         }
         if ($this->input->getOption('verbose')) {
             dump($answers);
         }
-        $this->sendData($data, $answers);
+
+        if ($answers) {
+            $data['command'] = 'partial';
+            $remoteHandler->sendData($this->survosClient, array_filter($data, function ($key) {
+                return in_array($key, ['command', 'taskId','assignmentId','channelCode']);
+            }, ARRAY_FILTER_USE_KEY), $answers);
+        }
 
         return true;
-    }
-
-    private function resolveLocalPath($url): string
-    {
-        $platformRoot = realpath($this->getContainer()->getParameter('kernel.project_dir') . '/../platform/web');
-        if (!file_exists($platformRoot)) {
-            throw new \Exception("Can't find the platform root. It's supposed to be here: {$platformRoot}");
-        }
-        if (!preg_match('/(\/uploads.+$)/', $url, $matches)) {
-            throw new \Exception("Can't parse file location from url: {$url}");
-        }
-        $path = $platformRoot . $matches[1];
-        if (!file_exists($path)) {
-            throw new \Exception("Can't resolve local path ({$path}) from url: {$url}");
-        }
-        return $path;
-    }
-
-    private function downloadFile($url)
-    {
-        $path = sys_get_temp_dir() . '/' . md5($url). '.zip';
-        if (!file_exists($path)) {
-            $newfname = $path;
-            if ($file = fopen($url, 'rb'))
-            {
-                $newf = fopen($newfname, 'wb');
-                if ($newf) {
-                    while (!feof($file)) {
-                        fwrite($newf, fread($file, 1024 * 8), 1024 * 8);
-                    }
-                }
-                fclose($file);
-                if ($newf) {
-                    fclose($newf);
-                }
-            }
-        }
-        return $path;
     }
 
     protected function processFile($sourceFile)

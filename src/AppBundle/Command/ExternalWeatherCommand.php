@@ -55,7 +55,9 @@ class ExternalWeatherCommand extends SqsCommand
 
     protected function processMessage(array $data, array $message) : bool
     {
-        $data = $this->validateMessage($data);
+        $remoteHandler = $this->getContainer()->get('app.remote_handler');
+        $remoteHandler->setOutput($this->output);
+        $data = $remoteHandler->validateMessage($data);
         $payload = $data['payload'];
         if ($this->input->getOption('verbose')) {
             dump($data, $payload);
@@ -68,7 +70,7 @@ class ExternalWeatherCommand extends SqsCommand
             }
             if ($answers) {
                 // $data['command'] = 'partial';
-                $this->sendData(array_filter($data, function ($key) { return in_array($key, ['command', 'taskId','assignmentId','channelCode']);}, ARRAY_FILTER_USE_KEY),
+                $remoteHandler->sendData($this->survosClient, array_filter($data, function ($key) { return in_array($key, ['command', 'taskId','assignmentId','channelCode']);}, ARRAY_FILTER_USE_KEY),
                     $answers);
             }
         } catch (\Exception $e) {

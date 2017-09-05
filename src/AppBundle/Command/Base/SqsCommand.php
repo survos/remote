@@ -8,14 +8,11 @@ use Aws\Sqs\SqsClient;
 use GuzzleHttp\Promise\Promise;
 use GuzzleHttp\Promise\PromiseInterface;
 use React\EventLoop\StreamSelectLoop;
-use Survos\Client\Resource\ChannelResource;
 use Survos\Client\SurvosClient;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
-use Symfony\Component\OptionsResolver\OptionsResolver;
-
 use Bunny\Channel;
 use Bunny\Async\Client as BunnyClient;
 use Bunny\Message;
@@ -324,72 +321,6 @@ abstract class SqsCommand extends BaseCommand
             ]
         );
     }
-
-    /**
-     * send the answers back to using ChannelResource::sendData
-     */
-    protected function sendData(array $channelData, array $answers): array
-    {
-        $channelData = (new OptionsResolver())->setDefaults([
-            'assignmentId' => null,
-            'command' => 'complete',
-        ])->setRequired([
-            'taskId',
-            'channelCode'
-        ])->resolve($channelData);
-
-        dump(__METHOD__, $answers);
-        $currentUserId = $this->survosClient->getLoggedUser()['id'];
-        $res = new ChannelResource($this->survosClient);
-        $response = $res->sendData($channelData['channelCode'], $sentData = [
-            'answers' => $answers,
-            // seems like this meta-data could be grouped
-            'command' => $channelData['command'],
-            'memberId' => $currentUserId,
-            'taskId' => $channelData['taskId'],
-            'assignmentId' => $channelData['assignmentId'],
-        ]);
-        $this->output->writeln(sprintf("Submitted to %s:\n %s\nReceived: %s",
-            $res->getLastRequestPath(),
-            json_encode($sentData, JSON_PRETTY_PRINT),
-            json_encode($response, JSON_PRETTY_PRINT)) );
-        return $response;
-    }
-
-    /**
-     * send error to ChannelResource::sendData
-     */
-    protected function sendError(string $channelCode, string $error, int $taskId, ?int $assignmentId): array
-    {
-        dump(__METHOD__, $error);
-        $currentUserId = $this->survosClient->getLoggedUser()['id'];
-        $res = new ChannelResource($this->survosClient);
-        $response = $res->sendData($channelCode, [
-            'error' => $error,
-            'memberId' => $currentUserId,
-            'taskId' => $taskId,
-            'assignmentId' => $assignmentId,
-        ]);
-        $this->output->writeln('Submitted: ' . json_encode($response, JSON_PRETTY_PRINT));
-        return $response;
-    }
-
-    /**
-     * @param array $data
-     * @return array
-     */
-    protected function validateMessage($data)
-    {
-        $resolver = new OptionsResolver();
-        $resolver->setDefined([
-            'action', 'deployment', 'parameters',
-            //TODO: we don't use these params
-            'statusEndpoint', 'receiveEndpoint', 'receiveMethod',
-        ]);
-        $resolver->setRequired(['payload', 'mapmobToken', 'apiUrl', 'accessToken', 'taskId', 'assignmentId', 'channelCode']);
-        return $resolver->resolve((array) $data);
-    }
-
 
     /**
      * @param $apiUrl

@@ -28,6 +28,7 @@ parameters:
 
     aws_key: 'key'
     aws_secret: 'secret'
+    platform_path: '/var/www/survos/platform'
     survos:
         target:
             endpoint: 'http://platform.l.survos.com/'
