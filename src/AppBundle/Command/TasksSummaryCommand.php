@@ -64,7 +64,7 @@ class TasksSummaryCommand extends BaseCommand
         }
 
         $page = 0;
-        $perPage = 100;
+        $perPage = 10;
         $maxPages = 1;
         $data = [];
         $no = 1;
@@ -89,7 +89,7 @@ class TasksSummaryCommand extends BaseCommand
             );
 
         while ($page < $maxPages) {
-            $tasks = $tasksResource->getList(++$page, $perPage, $criteria, [], [], $params);
+            $tasks = $tasksResource->getList($criteria, [], ++$page, $perPage);
             $maxPages = $tasks['pages'];
             // if no items, return
             printf("Items: %d of Total: %d, Limit: $limit, No: $no\n", count($tasks['items']), $tasks['total']);
