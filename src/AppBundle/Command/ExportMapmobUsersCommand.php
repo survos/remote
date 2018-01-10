@@ -1,6 +1,7 @@
 <?php
 namespace AppBundle\Command;
 
+use Survos\Client\Resource\OAuthAccessToken;
 use Survos\Client\Resource\UserResource;
 use Survos\Client\SurvosClient;
 use Symfony\Bundle\FrameworkBundle\Command\ContainerAwareCommand;
@@ -33,7 +34,10 @@ class ExportMapmobUsersCommand extends ContainerAwareCommand
         $writer = new \EasyCSV\Writer($file);
         $users = $this->getUsers($project, $client, $itemsPerPage);
         foreach ($users as $key => $user) {
-            $this->normalize($user);
+            $this->output->write(sprintf('Obtaining list of granted projects for user %s...', $user['username']));
+            $grantedProjects = $this->getGrantedProjects($user['username'], $client, $itemsPerPage);
+            $this->output->writeln('Done');
+            $user = $this->normalize($user, $grantedProjects);
             if ($key === 0) {
                 $header = array_keys($user);
                 $writer->writeRow($header);
@@ -50,16 +54,25 @@ class ExportMapmobUsersCommand extends ContainerAwareCommand
         if ($project) {
             $filter['oauthClient'] = $project;
         }
-        $users = $userRes->getList($filter);
+        $users = $userRes->getList($filter, [], null, $itemsPerPage);
         $usersIds = array_column($users['hydra:member'], 'id');
         $this->output->writeln(sprintf('Found %d users: %s', count($usersIds), json_encode($usersIds)));
         return $users['hydra:member'];
     }
 
-    public function normalize(array &$user)
+    private function getGrantedProjects(string $username, SurvosClient $client, int $itemsPerPage): array
     {
-        $user['roles'] = isset($user['roles']) ? implode(',', $user['roles']) : '';
+        $res = new OAuthAccessToken($client);
+        $tokens = $res->getList(['username' => $username], [], null, $itemsPerPage);
+        return array_unique(array_column($tokens['hydra:member'], 'clientCode'));
+    }
+
+    private function normalize(array $user, array $grantedProjects)
+    {
+        $user['roles'] = isset($user['roles']) ? implode('|', $user['roles']) : '';
         unset($user['complianceSummary']);
+        $user['grantedProjects'] = implode('|', $grantedProjects);
+        return $user;
     }
 
     private function authorize($login, $pass)

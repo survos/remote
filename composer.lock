@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#composer-lock-the-lock-file",
         "This file is @generated automatically"
     ],
-    "content-hash": "05a726f74e23093d78259376347b7d51",
+    "content-hash": "ae2740f855752ec5141d4ace2c3c57d5",
     "packages": [
         {
             "name": "aws/aws-sdk-php",
@@ -2381,16 +2381,16 @@
         },
         {
             "name": "survos/platform-api-php",
-            "version": "dev-master",
+            "version": "1.2.1",
             "source": {
                 "type": "git",
                 "url": "https://github.com/survos/platform-api-php.git",
-                "reference": "2d8d2ba5410e828b83a82e0515911ca11a2655f9"
+                "reference": "cf33f3342c25aa29dd635ea6c3e5d179a8c389f5"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/survos/platform-api-php/zipball/2d8d2ba5410e828b83a82e0515911ca11a2655f9",
-                "reference": "2d8d2ba5410e828b83a82e0515911ca11a2655f9",
+                "url": "https://api.github.com/repos/survos/platform-api-php/zipball/cf33f3342c25aa29dd635ea6c3e5d179a8c389f5",
+                "reference": "cf33f3342c25aa29dd635ea6c3e5d179a8c389f5",
                 "shasum": ""
             },
             "require": {
@@ -2407,7 +2407,7 @@
                 "proprietary"
             ],
             "description": "Survos php api client",
-            "time": "2017-03-21T09:57:44+00:00"
+            "time": "2017-02-28T16:34:40+00:00"
         },
         {
             "name": "swiftmailer/swiftmailer",
@@ -3260,9 +3260,7 @@
     ],
     "aliases": [],
     "minimum-stability": "dev",
-    "stability-flags": {
-        "survos/platform-api-php": 20
-    },
+    "stability-flags": [],
     "prefer-stable": true,
     "prefer-lowest": false,
     "platform": {
