@@ -42,11 +42,15 @@ class ExportMapmobTracksCommand extends ContainerAwareCommand
         $output->writeln("Export complete");
     }
 
-    private function getTracksBatches(string $project, SurvosClient $client, int $itemsPerPage): \Generator
+    private function getTracksBatches(?string $project, SurvosClient $client, int $itemsPerPage): \Generator
     {
         $userRes = new UserResource($client);
         $trackRes = new TrackResource($client);
-        $users = $userRes->getList(['oauthClient' => $project]);
+        $filter = [];
+        if ($project) {
+            $filter['oauthClient'] = $project;
+        }
+        $users = $userRes->getList($filter);
         $usersIds = array_column($users['hydra:member'], 'id');
         $this->output->writeln(sprintf('Found %d users: %s', count($usersIds), json_encode($usersIds)));
         foreach ($users['hydra:member'] as $user) {

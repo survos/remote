@@ -1,7 +1,6 @@
 <?php
 namespace AppBundle\Command;
 
-use Survos\Client\Resource\TrackResource;
 use Survos\Client\Resource\UserResource;
 use Survos\Client\SurvosClient;
 use Symfony\Bundle\FrameworkBundle\Command\ContainerAwareCommand;
@@ -17,7 +16,7 @@ class ExportMapmobUsersCommand extends ContainerAwareCommand
     public function configure()
     {
         $this->setName('mapmob:export-users')
-            ->addOption('project', null, InputOption::VALUE_REQUIRED, 'Project to export tracks from')
+            ->addOption('project', null, InputOption::VALUE_REQUIRED, 'Project to export users from')
             ->addOption('user', 'u', InputOption::VALUE_REQUIRED, 'Mapmob ADMIN Username')
             ->addOption('password', 'p', InputOption::VALUE_REQUIRED, 'Mapmob ADMIN Password')
             ->addOption('items-per-page', null, InputOption::VALUE_REQUIRED, 'Batch size', 500);
@@ -44,11 +43,14 @@ class ExportMapmobUsersCommand extends ContainerAwareCommand
         $output->writeln("Export complete");
     }
 
-    private function getUsers(string $project, SurvosClient $client, int $itemsPerPage): array 
+    private function getUsers(?string $project, SurvosClient $client, int $itemsPerPage): array
     {
         $userRes = new UserResource($client);
-        $trackRes = new TrackResource($client);
-        $users = $userRes->getList(['oauthClient' => $project]);
+        $filter = [];
+        if ($project) {
+            $filter['oauthClient'] = $project;
+        }
+        $users = $userRes->getList($filter);
         $usersIds = array_column($users['hydra:member'], 'id');
         $this->output->writeln(sprintf('Found %d users: %s', count($usersIds), json_encode($usersIds)));
         return $users['hydra:member'];
