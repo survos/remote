@@ -20,6 +20,7 @@ class ExportMapmobTracksCommand extends ContainerAwareCommand
             ->addOption('project', null, InputOption::VALUE_REQUIRED, 'Project to export tracks from')
             ->addOption('user', 'u', InputOption::VALUE_REQUIRED, 'Mapmob ADMIN Username')
             ->addOption('password', 'p', InputOption::VALUE_REQUIRED, 'Mapmob ADMIN Password')
+            ->addOption('filtered-users', null, InputOption::VALUE_REQUIRED, 'Users to filter by')
             ->addOption('items-per-page', null, InputOption::VALUE_REQUIRED, 'Batch size', 500);
     }
 
@@ -32,7 +33,9 @@ class ExportMapmobTracksCommand extends ContainerAwareCommand
         $file = sys_get_temp_dir().'/'.uniqid($project).'.csv';
         $output->writeln("File is {$file}");
         $writer = new \EasyCSV\Writer($file);
-        foreach ($this->getTracksBatches($project, $client, $itemsPerPage) as $index => $batch) {
+        $filteredUsers = array_filter(explode(',', $input->getOption('filtered-users')));
+        $userIds = $this->getUsers($project, $client, $itemsPerPage, $filteredUsers);
+        foreach ($this->getTracksBatches($userIds, $client, $itemsPerPage) as $index => $batch) {
             if (0 === $index) {
                 $header = array_keys($batch[0]);
                 $writer->writeRow($header);
@@ -42,19 +45,29 @@ class ExportMapmobTracksCommand extends ContainerAwareCommand
         $output->writeln("Export complete");
     }
 
-    private function getTracksBatches(?string $project, SurvosClient $client, int $itemsPerPage): \Generator
+    private function getUsers(?string $project, SurvosClient $client, int $itemsPerPage, ?array $allowedIds): array
     {
         $userRes = new UserResource($client);
-        $trackRes = new TrackResource($client);
         $filter = [];
         if ($project) {
             $filter['oauthClient'] = $project;
         }
-        $users = $userRes->getList($filter);
+        $users = $userRes->getList($filter, [], null, $itemsPerPage);
         $usersIds = array_column($users['hydra:member'], 'id');
         $this->output->writeln(sprintf('Found %d users: %s', count($usersIds), json_encode($usersIds)));
-        foreach ($users['hydra:member'] as $user) {
-            $userId = $user['id'];
+        if (!empty($allowedIds)) {
+            $usersIds = array_intersect($usersIds, $allowedIds);
+            $this->output->writeln(sprintf('Found %d allowed users: %s', count($usersIds), json_encode($usersIds)));
+        }
+        return $usersIds;
+    }
+
+
+    private function getTracksBatches(array $usersIds, SurvosClient $client, int $itemsPerPage): \Generator
+    {
+        $trackRes = new TrackResource($client);
+        $this->output->writeln(sprintf('Found %d users: %s', count($usersIds), json_encode($usersIds)));
+        foreach ($usersIds as $userId) {
             $page=0;
             do {
                 $page++;
